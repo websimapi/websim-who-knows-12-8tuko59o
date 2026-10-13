@@ -1,9 +1,50 @@
 import * as THREE from 'three';
 import { TASKS } from './tasks.js';
 
+function grimeTexture() {
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  let seed = 19;
+  const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (const [x, y, rx, ry, angle] of [[70, 79, 49, 63, -.3], [158, 132, 38, 70, .22], [99, 185, 55, 26, -.15]]) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.scale(rx, ry);
+    const haze = ctx.createRadialGradient(-.1, -.15, .04, 0, 0, 1);
+    haze.addColorStop(0, 'rgba(62,59,41,.43)');
+    haze.addColorStop(.45, 'rgba(75,73,51,.23)');
+    haze.addColorStop(1, 'rgba(86,83,59,0)');
+    ctx.fillStyle = haze; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  for (let i = 0; i < 130; i++) {
+    const x = 24 + random() * 208, y = 22 + random() * 210;
+    const r = .4 + random() * (i % 8 ? 2.2 : 4.8);
+    ctx.fillStyle = `rgba(55,52,37,${.06 + random() * .25})`;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * (.3 + random()), random() * 6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 16; i++) {
+    const x = 35 + random() * 180, y = 25 + random() * 160;
+    const length = 10 + random() * 54;
+    ctx.strokeStyle = `rgba(65,62,44,${.06 + random() * .14})`;
+    ctx.lineWidth = 1 + random() * 4;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x - 4, y + length * .3, x + 5, y + length * .7, x + random() * 8 - 4, y + length);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 18; i++) {
+    const x = 30 + random() * 190, y = 25 + random() * 205;
+    ctx.strokeStyle = `rgba(0,0,0,${.08 + random() * .25})`;
+    ctx.lineWidth = 1 + random() * 3;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 5 + random() * 24, y - 4 + random() * 12); ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 // Work stays in the house: every station visibly changes as tasks progress.
 export function buildTaskObjects() {
-  const root = new THREE.Group(), stations = new Map(); let painter = null;
+  const root = new THREE.Group(), stations = new Map(); let painter = null, mirrorGrime = null;
   const mat = color => new THREE.MeshStandardMaterial({ color, roughness: .8 });
   const wood = mat(0x98663c), green = mat(0x6aaf36), pale = mat(0xb3ce74), paper = mat(0xe7dcc3), brass = mat(0xb79550);
   const box = (g, w, h, d, material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
@@ -41,11 +82,25 @@ export function buildTaskObjects() {
         loader.load(u, (t) => { if (url !== u) return; t.colorSpace = THREE.SRGBColorSpace; pic.material.map?.dispose(); pic.material.map = t; pic.material.needsUpdate = true; pic.visible = true; });
       };
     } else if (task.id === 'bathroom') {
-      const grime = new THREE.MeshStandardMaterial({ color: 0x5c5028, transparent: true, opacity: .6, depthWrite: false, roughness: 1 });
-      const blob = (r, x, y, z) => { const m = new THREE.Mesh(new THREE.CircleGeometry(r, 14), grime); m.position.set(x, y, z); m.rotation.x = -Math.PI / 2; g.add(m); };
-      blob(.09, -.5, .006, .05); blob(.07, .35, .006, -.05); blob(.06, .8, .006, .08);
-      for (let i = 0; i < 5; i++) blob(.16 + (i % 2) * .08, -1.2 + i * .6, -.885, .9 + (i * 37 % 5) * .15);
-      update = p => { grime.opacity = (1 - p) * .6; grime.visible = p < 1; };
+      const grime = new THREE.MeshBasicMaterial({ map: grimeTexture(), transparent: true, opacity: .95, depthWrite: false, side: THREE.DoubleSide });
+      mirrorGrime = new THREE.Group(); g.add(mirrorGrime);
+      const smear = (w, h, x, y, z, floor = false, angle = 0, parent = g) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), grime);
+        m.position.set(x, y, z);
+        m.rotation.set(floor ? -Math.PI / 2 : 0, 0, angle);
+        m.renderOrder = 2;
+        parent.add(m);
+      };
+      // A few streaks on the left mirror, in front of the live reflection.
+      smear(.31, .45, -1.09, .96, -.325, false, -.16, mirrorGrime);
+      smear(.22, .38, -.61, 1.12, -.325, false, .13, mirrorGrime);
+      smear(.26, .24, -.86, .58, -.325, false, .35, mirrorGrime);
+      // Remaining grime sits on the basins and floor tiles.
+      smear(.23, .16, -.5, .006, .05, true, -.2);
+      smear(.19, .15, .35, .006, -.05, true, .25);
+      smear(.17, .13, .8, .006, .08, true, -.4);
+      for (let i = 0; i < 5; i++) smear(.34 + (i % 2) * .12, .28, -1.2 + i * .6, -.885, .9 + (i * 37 % 5) * .15, true, i * .43);
+      update = (p, state) => { g.visible = !!state?.active && p < 1; grime.opacity = (1 - p) * .95; };
     } else if (task.id === 'defrag') {
       g.rotation.y = Math.PI;
       const beige = mat(0xd8cfb4), dark = mat(0x2b2b2b);
@@ -71,7 +126,7 @@ export function buildTaskObjects() {
     }
     update(0); stations.set(task.id, update); if (paint) painter = paint;
   }
-  return { root, update(scene = {}, painting = null) { for (const [id, update] of stations) update(scene[id]?.progress || 0); painter?.(painting); } };
+  return { root, mirrorGrime, update(scene = {}, painting = null) { for (const [id, update] of stations) update(scene[id]?.progress || 0, scene[id]); painter?.(painting); } };
 }
 
 export function skullBallTexture() {

@@ -17,7 +17,7 @@ export const TASKS = [
   station('paint', '🖌', 'Paint a picture', 'art', 7.1, 4.1, 1.375, 5, 'Paint at the easel', { stand: [-0.35, 1.15],
     how: 'Name a subject, then brush the canvas. The paint takes on a life of its own and the finished picture hangs on the easel for everyone.' }),
   station('bathroom', '🧽', 'Clean the bathroom', 'bathroom', 4.0, 0.46, 0.9, 6, 'Scrub the bathroom', { tool: 'rag', stand: [0, 1.1],
-    how: 'A rag is left in the bathroom for you. Hold it and scrub every patch of grime off the sink and tiles.' }),
+    how: 'A rag is left in the bathroom for you. Hold it and scrub every patch of grime off the sink, mirror and tiles.' }),
   station('defrag', '▦', 'Defragment the computer', 'office', 11.6, 8.35, 0.78, 5, 'Use the computer', { stand: [0, -1.0],
     how: 'Click every red fragment to pull it back into place, then let the defrag run to the end.' }),
   station('clock', '◷', 'Set the clock', 'dining', 0.6, 3.6, 1.4, 4, 'Set the clock', { stand: [1, 0],
@@ -42,6 +42,9 @@ export const TaskMethods = {
       c.task = !c.alive || c.isKiller ? null : { day: this.day, id: Math.random() < 0.2 ? 'none' : available[Math.floor(Math.random() * available.length)].id, complete: false };
       if (c.task?.id === 'bathroom') this.spawnTaskRag();
       this.sendTask(c);
+    }
+    if ([...this.chars.values()].some((c) => c.task?.id === 'bathroom')) {
+      this.taskScene.bathroom = { active: true, progress: 0, at: this.time };
     }
   },
   // Whoever has to clean the bathroom finds a rag waiting on the vanity.

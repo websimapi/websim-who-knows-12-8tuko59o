@@ -139,10 +139,14 @@ export class View {
       const capture = mirror.onBeforeRender;
       mirror.onBeforeRender = (...args) => {
         const viewer = this.mirrorViewer;
+        const mirrorGrime = this.taskObjects?.mirrorGrime;
+        const grimeVisible = mirrorGrime?.visible;
         this.mirrorCaptureDepth = (this.mirrorCaptureDepth || 0) + 1;
         if (this.mirrorCaptureDepth === 1) viewer?.ownHidden?.hideHead(false);
+        if (mirrorGrime) mirrorGrime.visible = false;
         try { capture.call(mirror, ...args); }
         finally {
+          if (mirrorGrime) mirrorGrime.visible = grimeVisible;
           this.mirrorCaptureDepth--;
           if (this.mirrorCaptureDepth === 0) viewer?.ownHidden?.hideHead(true);
         }
